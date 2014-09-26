@@ -1,2 +1,5 @@
 count_kmers.cpp
 kmers.so
+data/genomic-annotations-dm3.fa
+data/genomic-annotations-dm3.fa.flat
+data/genomic-annotations-dm3.fa.gdx

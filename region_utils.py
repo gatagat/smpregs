@@ -41,6 +41,13 @@ class RegionAcceptor(object):
     def accept(self, region):
         raise NotImplemented('Subclasses of RegionAcceptor have to implement this method.')
 
+    @property
+    def reason(self):
+        if self._reason_args == True:
+            return 'accepted'
+        else:
+            return self._reason_args[0] % self._reason_args[1:]
+
 
 def count_g_and_c(seq):
     """
@@ -56,17 +63,22 @@ class RegionAcceptorApproxGC(RegionAcceptor):
     """
 
     def __init__(self, threshold=10, **kwargs):
+        assert threshold >= 0
         super(RegionAcceptorApproxGC, self).__init__(**kwargs)
         seq = self.fasta[self.template.chr][self.template.start:self.template.stop]
-        gc = count_g_and_c(seq)
-        self.lb = gc - threshold
-        self.ub = gc + threshold
+        self.gc = count_g_and_c(seq)
+        self.threshold = threshold
 
     def accept(self, region):
         seq = self.fasta[region.chr][region.start:region.stop]
         gc = count_g_and_c(seq)
-        ret = (gc > self.lb) and (gc < self.ub)
-        return ret
+        diff = abs(self.gc - gc)
+        if diff <= self.threshold:
+            self._reason_args = True
+            return True
+        else:
+            self._reason_args = ('difference %d', diff)
+            return False
 
 
 class RegionAcceptorAND(RegionAcceptor):
@@ -90,7 +102,7 @@ class GenomicAnnotationsHistogram(object):
     Wraps computation of histograms over genomic annotations.
 
     Genomic annotations for the whole genome have to be encoded in fasta
-    format. Use encode_genomic_annotations.py to create it from a BED file.
+    format. Use encode_annotations.py to create it from a BED file.
     """
     def __init__(self, filename):
         """
@@ -146,7 +158,12 @@ class RegionAcceptorApproxHistogram(RegionAcceptor):
         if hist is None:
             return False
         dis = self.dissimilarity(self.template_hist, hist)
-        return dis < self.threshold
+        if dis < self.threshold:
+            self._reason_args = True
+            return True
+        else:
+            self._reason_args = ('dissimilarity %d', dis)
+            return False
 
 
 class GenomicAnnotationsAtPosition(object):
@@ -158,25 +175,31 @@ class GenomicAnnotationsAtPosition(object):
 
 
 class RegionAcceptorGenomicAnnotation(RegionAcceptor):
-    def __init__(self, filename=None, position=None, **kwargs):
+    def __init__(self, filename=None, pos=None, **kwargs):
         """
         filename: string
             File with genomic annotations for the whole genome encoded in fasta format.
-            (Use encode_genomic_annotations.py to create it.)
-        position: int
-            Take into account only a single position (eg. peak summit)
+            (Use encode_annotations.py to create it.)
+        pos: int
+            Take into account only a single position (eg. peak summit, 0 == 1st bp)
 
         Exactly one option of either position or dissimilarity-and-threshold has to be specified.
         """
         super(RegionAcceptorGenomicAnnotation, self).__init__(**kwargs)
         self.ga = GenomicAnnotationsAtPosition(filename)
-        self.position = int(position)
+        self.position = int(pos)
         self.template_ga = self.ga(
                 self.template.chr, self.template.start + self.position)
+        assert pos >= 0 and pos < (self.template.stop - self.template.start)
 
     def accept(self, region):
         ga = self.ga(region.chr, region.start + self.position)
-        return self.template_ga == ga
+        if self.template_ga == ga:
+            self._reason_args = True
+            return True
+        else:
+            self._reason_args = ('%s != %s', ga, self.template_ga)
+            return False
 
 
 class KmerHistogram(object):
@@ -298,7 +321,7 @@ def the_random_regions_lair(region, lo, hi):
     while True:
         start = np.random.randint(lo, hi)
         stop = start + region_len
-        yield Region(chr=region.chr, start=start, stop=stop, name='random_for_' + region.name)
+        yield Region(chr=region.chr, start=start, stop=stop, name='rnd_' + region.name)
 
 
 def generate(input_region, allowed_space, max_generate_iter=10000):
@@ -310,7 +333,7 @@ def generate(input_region, allowed_space, max_generate_iter=10000):
     lo, hi = allowed_space.range(input_region.chr)
     for region in the_random_regions_lair(input_region, lo, hi):
         if allowed_space.contains(region):
-            logger.info('GEN %s', region)
+            logger.debug('GEN %s', region)
             return region
         logger.info('NOT %s', region)
         i += 1

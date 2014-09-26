@@ -25,20 +25,21 @@ from region_utils import get_log
 import socket
 
 
-def _setup_log():
+def _setup_log(level=logging.INFO):
     logging.basicConfig()
     log = logging.getLogger()
+    log.handlers = []
     try:
-        handler = logging.StreamHandler(stream=sys.stdout)
+        handler = logging.StreamHandler(stream=sys.stderr)
     except TypeError:
-        handler = logging.StreamHandler(strm=sys.stdout)
+        handler = logging.StreamHandler(strm=sys.stderr)
     formatter = logging.Formatter(
             fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             datefmt='%Y.%m.%d %I:%M:%S %p'
         )
     handler.setFormatter(formatter)
     log.addHandler(handler)
-    log.setLevel(logging.INFO)
+    log.setLevel(level)
 
 
 def get_genome(genome_assembly):
@@ -104,7 +105,6 @@ def parse_filters(filters, genome_fasta, genomic_annotations=None):
         except Exception, e:
             logger.exception('Error parsing filter %s' , f)
             raise ValueError('Error parsing filter %s (%s)\n' % (f, str(e)))
-        print filter_opts
         acceptors += [(all_acceptor_classes[filter_name], dict(filter_opts))]
     return acceptors
 
@@ -173,7 +173,7 @@ def sample_regions(regions_file, allowed_space, acceptors, fasta):
             for acceptor in acceptor_instances:
                 if not acceptor.accept(candidate):
                     accepted = False
-                    logger.info('REJ %s on %s', candidate, acceptor)
+                    logger.info('REJ %s on %s(%s)', candidate, acceptor.__class__.__name__, acceptor.reason)
                     break
         if accepted:
             logger.info('ACC %s', candidate)
@@ -184,8 +184,6 @@ def sample_regions(regions_file, allowed_space, acceptors, fasta):
 if __name__ == '__main__':
     import argparse
     import textwrap
-
-    _setup_log()
 
     parser = argparse.ArgumentParser(
             description='Sample random regions one-by-one matching given input regions.',
@@ -199,7 +197,7 @@ if __name__ == '__main__':
                   Allowed filters are: GC, GAPos, GAHist, and KMer.
 
                   GC:threshold=10 allows at most 10 more/less of GC nucleotides.
-                  GAPos:position=101 enforces equal genomic annotation at position 101 in the sequence.
+                  GAPos:pos=101 enforces equal genomic annotation at position 101 in the sequence.
                   GAHist:threshold=150 allows at most 150 errors when matching histograms of genomic annotations.
                   KMer:k=2,threshold=50 analog. to GAHist but for k-mer sequence content.
 
@@ -228,10 +226,14 @@ if __name__ == '__main__':
             it.')
     parser.add_argument('filters', action='store', nargs='*', help='Filters. \
             See below.')
+    parser.add_argument('-v', '--verbose', action='count', default=0)
     opts = parser.parse_args()
 
+    loglevel = max(logging.DEBUG, logging.WARNING - opts.verbose*10)
+    _setup_log(level=loglevel)
+
     genome_fasta = get_genome(opts.genome_assembly)
-    acceptors = parse_filters(opts.filters, genome_fasta)
+    acceptors = parse_filters(opts.filters, genome_fasta, opts.genomic_annotations)
     allowed_space_opts = {}
     if opts.include is not None:
         allowed_space_opts['include'] = regions_reader(opts.include)
