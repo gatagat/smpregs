@@ -13,14 +13,18 @@
 # Exclude overlaps of the generated regions. Exclude input regions.
 #
 
+# XXX: probably always we want regions without N's - check it always?
+
 #TODO: now check the random regions selected accroding to peak summit genomic distribution
 #    ? does it still look like before (large gd regions in active seqs, and small gd regions in inactive)?
+
+#TODO: allow for passing "-" to read regions (and other inputs) from stdin - save it to tempdir to be able to go through it twice
 
 import logging
 import sys
 from pyfasta import Fasta
 from region_utils import regions_reader, AllowedSpace, generate, \
-    RegionAcceptorApproxGC, RegionAcceptorGenomicAnnotation, RegionAcceptorApproxHistogram, GenomicAnnotationsHistogram, KmerHistogram
+    RegionAcceptorApproxGC, RegionAcceptorGenomicAnnotation, RegionAcceptorApproxHistogram, GenomicAnnotationsHistogram, KmerHistogram, RegionAcceptorNoNs
 from region_utils import get_log
 import socket
 
@@ -42,14 +46,16 @@ def _setup_log(level=logging.INFO):
     log.setLevel(level)
 
 
-def get_genome(genome_assembly):
+def get_genome(genome_assembly, tempdir):
     """
     Return Fasta object with the required genome.
     """
+    logger = get_log('generate')
     if socket.gethostname().split('.')[0].upper() == 'MPBA02':
         fasta_filename = '/Users/kazmar/tmp/%s.fa' % genome_assembly
     else:
-        fasta_filename = '/groups/stark/genomes/%s.fa' % genome_assembly
+        fasta_filename = '/groups/stark/kazmar/data/genomes/%s.fa' % genome_assembly
+    logger.debug('Getting genome from %s', fasta_filename)
     return Fasta(fasta_filename)
 
 
@@ -75,6 +81,7 @@ def parse_filters(filters, genome_fasta, genomic_annotations=None):
             GAHist=RegionAcceptorApproxHistogram,
             KMer=RegionAcceptorApproxHistogram)
     acceptors = []
+    logger.debug('Parsing filters: %s', str(filters))
     for f in filters:
         try:
             filter_name, filter_args = f.split(':', 1)
@@ -121,6 +128,14 @@ def output_file_wrapper(filename=None):
         writer = open(filename, 'w')
         yield writer
         writer.close()
+
+@contextlib.contextmanager
+def tempdir():
+    from tempfile import mkdtemp
+    tmp = mkdtemp()
+    yield tmp
+    from shutil import rmtree
+    rmtree(tmp)
 
 
 def output_region(stream, region):
@@ -231,18 +246,22 @@ if __name__ == '__main__':
 
     loglevel = max(logging.DEBUG, logging.WARNING - opts.verbose*10)
     _setup_log(level=loglevel)
+    logger = get_log('main')
+    logger.debug('Logging started at level %d', loglevel)
 
-    genome_fasta = get_genome(opts.genome_assembly)
-    acceptors = parse_filters(opts.filters, genome_fasta, opts.genomic_annotations)
-    allowed_space_opts = {}
-    if opts.include is not None:
-        allowed_space_opts['include'] = regions_reader(opts.include)
-    if opts.exclude is None:
-        allowed_space_opts['exclude'] = regions_reader(opts.regions)
-    else:
-        allowed_space_opts['exclude'] = regions_reader([opts.regions, opts.exclude])
-    allowed_space = AllowedSpace(fasta=genome_fasta, **allowed_space_opts)
-    with output_file_wrapper(opts.output) as fw:
-        for _, region in sample_regions(
-                opts.regions, allowed_space, acceptors, genome_fasta):
-            output_region(fw, region)
+    with tempdir() as tmp:
+        genome_fasta = get_genome(opts.genome_assembly, tmp)
+        acceptors = parse_filters(opts.filters, genome_fasta, opts.genomic_annotations)
+        acceptors = [(RegionAcceptorNoNs, {})] + acceptors
+        allowed_space_opts = {}
+        if opts.include is not None:
+            allowed_space_opts['include'] = regions_reader(opts.include)
+        if opts.exclude is None:
+            allowed_space_opts['exclude'] = regions_reader(opts.regions)
+        else:
+            allowed_space_opts['exclude'] = regions_reader([opts.regions, opts.exclude])
+        allowed_space = AllowedSpace(fasta=genome_fasta, **allowed_space_opts)
+        with output_file_wrapper(opts.output) as fw:
+            for _, region in sample_regions(
+                    opts.regions, allowed_space, acceptors, genome_fasta):
+                output_region(fw, region)

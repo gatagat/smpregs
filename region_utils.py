@@ -80,6 +80,23 @@ class RegionAcceptorApproxGC(RegionAcceptor):
             self._reason_args = ('difference %d', diff)
             return False
 
+class RegionAcceptorNoNs(RegionAcceptor):
+    """
+    Acceptor of regions requiring no unknown (N) nucleotides.
+    """
+
+    def __init__(self, **kwargs):
+        super(RegionAcceptorNoNs, self).__init__(**kwargs)
+
+    def accept(self, region):
+        seq = self.fasta[region.chr][region.start:region.stop]
+        if not 'N' in seq:
+            self._reason_args = True
+            return True
+        else:
+            self._reason_args = ('N in sequence', )
+            return False
+
 
 class RegionAcceptorAND(RegionAcceptor):
     """
