@@ -5,7 +5,7 @@ from pyfasta import Fasta
 import logging
 from kmers import all_kmers, count_kmers
 
-Region = namedtuple('Region', ['chr', 'start', 'stop', 'name'])
+Region = namedtuple('Region', ['chrom', 'start', 'stop', 'name'])
 
 
 def get_log(name, level=None):
@@ -28,9 +28,9 @@ def regions_reader(*args):
                     RuntimeError('At least 3 columns expected in input %s. Only %d found on line %s.' % \
                             (filename, len(toks), line))
                 if len(toks) == 3:
-                    yield Region(chr=toks[0], start=int(toks[1]), stop=int(toks[2]), name=None)
+                    yield Region(chrom=toks[0], start=int(toks[1]), stop=int(toks[2]), name=None)
                 else:
-                    yield Region(chr=toks[0], start=int(toks[1]), stop=int(toks[2]), name=toks[3])
+                    yield Region(chrom=toks[0], start=int(toks[1]), stop=int(toks[2]), name=toks[3])
 
 
 class RegionAcceptor(object):
@@ -65,12 +65,15 @@ class RegionAcceptorApproxGC(RegionAcceptor):
     def __init__(self, threshold=10, **kwargs):
         assert threshold >= 0
         super(RegionAcceptorApproxGC, self).__init__(**kwargs)
-        seq = self.fasta[self.template.chr][self.template.start:self.template.stop]
+        seq = self.fasta[self.template.chrom][self.template.start:self.template.stop]
         self.gc = count_g_and_c(seq)
-        self.threshold = threshold
+        if threshold <= 1.:
+            self.threshold = threshold * len(seq)
+        else:
+            self.threshold = threshold
 
     def accept(self, region):
-        seq = self.fasta[region.chr][region.start:region.stop]
+        seq = self.fasta[region.chrom][region.start:region.stop]
         gc = count_g_and_c(seq)
         diff = abs(self.gc - gc)
         if diff <= self.threshold:
@@ -120,7 +123,7 @@ class GenomicAnnotationsHistogram(object):
         Compute the genomic annotation histogram for a given region.
         """
         return dict(Counter(
-            self.regions_fa[region.chr][region.start:region.stop]))
+            self.regions_fa[region.chrom][region.start:region.stop]))
 
 
 def histogram_intersection(p, q):
@@ -189,11 +192,11 @@ class RegionAcceptorGenomicAnnotation(RegionAcceptor):
         self.ga = GenomicAnnotationsAtPosition(filename)
         self.position = int(pos)
         self.template_ga = self.ga(
-                self.template.chr, self.template.start + self.position)
+                self.template.chrom, self.template.start + self.position)
         assert pos >= 0 and pos < (self.template.stop - self.template.start)
 
     def accept(self, region):
-        ga = self.ga(region.chr, region.start + self.position)
+        ga = self.ga(region.chrom, region.start + self.position)
         if self.template_ga == ga:
             self._reason_args = True
             return True
@@ -215,7 +218,7 @@ class KmerHistogram(object):
         """
         Compute the k-mer histogram for a given region.
         """
-        seq = self.fasta[region.chr][region.start:region.stop]
+        seq = self.fasta[region.chrom][region.start:region.stop]
         if not np.in1d(list(str(seq).upper()), list('ACGT')).all():
             return None
         return dict(zip(self.keys, count_kmers(self.k, str(seq).upper())))
@@ -261,9 +264,9 @@ class AllowedSpace(object):
             for region in include:
                 if region.start >= region.stop:
                     raise ValueError('Region %r is invalid (start >= stop).' % region)
-                if region.chr not in intervals:
-                    intervals[region.chr] = []
-                intervals[region.chr] += [(region.start, region.stop)]
+                if region.chrom not in intervals:
+                    intervals[region.chrom] = []
+                intervals[region.chrom] += [(region.start, region.stop)]
             for k, v in intervals.items():
                 pos = v[0][0]
                 is_sorted = True
@@ -277,7 +280,7 @@ class AllowedSpace(object):
                     self._space[k] = IntervalLinkedList(sorted(v))
         if exclude is not None:
             for region in exclude:
-                self._space[region.chr].remove((region.start, region.stop))
+                self._space[region.chrom].remove((region.start, region.stop))
         for k in self._space.keys():
             self._update_range(k)
 
@@ -286,8 +289,8 @@ class AllowedSpace(object):
         """
         Remove region from the allowed space.
         """
-        self._space[region.chr].remove((region.start, region.stop))
-        self._update_range(region.chr)
+        self._space[region.chrom].remove((region.start, region.stop))
+        self._update_range(region.chrom)
 
 
     def _update_range(self, chr):
@@ -303,7 +306,7 @@ class AllowedSpace(object):
         """
         Check whether the given region is fully inside this space.
         """
-        return region.chr in self._space and (region.start, region.stop) in self._space[region.chr]
+        return region.chrom in self._space and (region.start, region.stop) in self._space[region.chrom]
 
 
     def range(self, chr):
@@ -321,7 +324,7 @@ def the_random_regions_lair(region, lo, hi):
     while True:
         start = np.random.randint(lo, hi)
         stop = start + region_len
-        yield Region(chr=region.chr, start=start, stop=stop, name='rnd_' + region.name)
+        yield Region(chrom=region.chrom, start=start, stop=stop, name='rnd_' + region.name)
 
 
 def generate(input_region, allowed_space, max_generate_iter=10000):
@@ -330,7 +333,7 @@ def generate(input_region, allowed_space, max_generate_iter=10000):
     """
     logger = get_log('generate')
     i = 0
-    lo, hi = allowed_space.range(input_region.chr)
+    lo, hi = allowed_space.range(input_region.chrom)
     for region in the_random_regions_lair(input_region, lo, hi):
         if allowed_space.contains(region):
             logger.debug('GEN %s', region)
