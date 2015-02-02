@@ -50,9 +50,10 @@ def get_genome(genome_assembly, tempdir):
     """
     Return Fasta object with the required genome.
     """
+    # TODO: use tempdir
     logger = get_log('generate')
-    if socket.gethostname().split('.')[0].upper() == 'MPBA02':
-        fasta_filename = '/Users/kazmar/tmp/%s.fa' % genome_assembly
+    if socket.gethostname().split('.')[0].lower() in ['nbm-imp-55', 'mpba02']:
+        fasta_filename = '/Users/kazmar/data/genomes/%s.fa' % genome_assembly
     else:
         fasta_filename = '/groups/stark/kazmar/data/genomes/%s.fa' % genome_assembly
     logger.debug('Getting genome from %s', fasta_filename)
@@ -94,7 +95,7 @@ def parse_filters(filters, genome_fasta, genomic_annotations=None):
                 if filter_name == 'KMer' and k == 'k':
                     kmer_k = int(v)
                 else:
-                    filter_opts += [(k, float(v))]
+                    filter_opts += [(k, float(v) if '.' in v else int(v))]
             if filter_name == 'KMer':
                 filter_opts += [('histogram', KmerHistogram(fasta=genome_fasta, k=kmer_k))]
                 filter_opts += [('features_per_nt', 2)]
@@ -143,13 +144,13 @@ def output_region(stream, region):
     Output region to stream.
     """
     if region.name is None:
-        s = '\t'.join([region.chr, str(region.start), str(region.stop)])
+        s = '\t'.join([region.chrom, str(region.start), str(region.stop)])
     else:
-        s = '\t'.join([region.chr, str(region.start), str(region.stop), region.name])
+        s = '\t'.join([region.chrom, str(region.start), str(region.stop), region.name])
     stream.write(s + '\n')
 
 
-def sample_regions(regions_file, allowed_space, acceptors, fasta):
+def sample_regions(regions, allowed_space, acceptors, fasta):
     """
     Generator providing random regions that match input regions.
 
@@ -160,7 +161,7 @@ def sample_regions(regions_file, allowed_space, acceptors, fasta):
 
     Parameters:
     ===========
-    regions_file:
+    regions: iterable of regions
     allowed_space: AllowedSpace object
         - Space to which candidate regions are restricted.
     acceptors: list of Acceptor objects.
@@ -174,7 +175,7 @@ def sample_regions(regions_file, allowed_space, acceptors, fasta):
     (input_region, matching_random_region)
     """
     logger = get_log('generate')
-    for input_region in regions_reader(regions_file):
+    for input_region in regions:
         acceptor_instances = []
         for acceptor in acceptors:
             acceptor_instances += [acceptor[0](
@@ -211,7 +212,7 @@ if __name__ == '__main__':
 
                   Allowed filters are: GC, GAPos, GAHist, and KMer.
 
-                  GC:threshold=10 allows at most 10 more/less of GC nucleotides.
+                  GC:threshold=10 allows at most 10 more/less of GC nucleotides (use floats between 0 and 1 for relative thresholds).
                   GAPos:pos=101 enforces equal genomic annotation at position 101 in the sequence.
                   GAHist:threshold=150 allows at most 150 errors when matching histograms of genomic annotations.
                   KMer:k=2,threshold=50 analog. to GAHist but for k-mer sequence content.
@@ -263,5 +264,5 @@ if __name__ == '__main__':
         allowed_space = AllowedSpace(fasta=genome_fasta, **allowed_space_opts)
         with output_file_wrapper(opts.output) as fw:
             for _, region in sample_regions(
-                    opts.regions, allowed_space, acceptors, genome_fasta):
+                    regions_reader(opts.regions), allowed_space, acceptors, genome_fasta):
                 output_region(fw, region)

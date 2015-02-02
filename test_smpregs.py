@@ -60,8 +60,27 @@ def test_sample_regions_gc():
         random_gc = region_gc(genome_fasta, random_region)
         print input_region
         print input_gc, random_gc
-        assert input_gc - 10 < random_gc
-        assert input_gc + 10 > random_gc
+        assert input_gc - 10 <= random_gc
+        assert input_gc + 10 >= random_gc
+    os.unlink(regions_file)
+
+
+def test_sample_regions_gc_relative():
+    #_setup_log()
+    np.random.seed(1234L)
+    genome_fasta = get_genome('dm3')
+    for size in [100, 200, 300]:
+        regions_file = create_regions_file(size, 10, genome_fasta)
+        for input_region, random_region in sample_regions(
+                regions_file, AllowedSpace(genome_fasta),
+                [(RegionAcceptorApproxGC, dict(threshold=0.1))], genome_fasta):
+            assert region_length(input_region) == region_length(random_region)
+            input_gc = region_gc(genome_fasta, input_region)
+            random_gc = region_gc(genome_fasta, random_region)
+            print input_region
+            print input_gc, random_gc, size
+            assert input_gc - 0.1 * size <= random_gc
+            assert input_gc + 0.1 * size >= random_gc
     os.unlink(regions_file)
 
 
@@ -69,7 +88,7 @@ def test_sample_regions_kmers():
     #_setup_log()
     np.random.seed(1234L)
     genome_fasta = get_genome('dm3')
-    regions_file = create_regions_file(301, 100, genome_fasta, no_ns=True)
+    regions_file = create_regions_file(301, 10, genome_fasta, no_ns=True)
     kmer_k = 2
     kmer_keys = all_kmers(kmer_k)
     for input_region, random_region in sample_regions(
