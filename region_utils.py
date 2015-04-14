@@ -92,8 +92,8 @@ class RegionAcceptorNoNs(RegionAcceptor):
         super(RegionAcceptorNoNs, self).__init__(**kwargs)
 
     def accept(self, region):
-        seq = self.fasta[region.chr][region.start:region.stop]
-        if not 'N' in seq:
+        seq = self.fasta[region.chrom][region.start:region.stop]
+        if not 'N' in seq and 'n' not in seq:
             self._reason_args = True
             return True
         else:
@@ -190,8 +190,8 @@ class GenomicAnnotationsAtPosition(object):
     def __init__(self, filename):
         self.regions_fa = Fasta(filename)
 
-    def __call__(self, chr, position):
-        return self.regions_fa[chr][position]
+    def __call__(self, chrom, position):
+        return self.regions_fa[chrom][position]
 
 
 class RegionAcceptorGenomicAnnotation(RegionAcceptor):
@@ -310,13 +310,13 @@ class AllowedSpace(object):
         self._update_range(region.chrom)
 
 
-    def _update_range(self, chr):
-        current = self._space[chr].next
+    def _update_range(self, chrom):
+        current = self._space[chrom].next
         start = current.data[0]
         while current is not None:
             stop = current.data[1]
             current = current.next
-        self._range[chr] = (start, stop)
+        self._range[chrom] = (start, stop)
 
 
     def contains(self, region):
@@ -326,8 +326,8 @@ class AllowedSpace(object):
         return region.chrom in self._space and (region.start, region.stop) in self._space[region.chrom]
 
 
-    def range(self, chr):
-        return self._range[chr]
+    def range(self, chrom):
+        return self._range[chrom]
 
 
 def the_random_regions_lair(region, lo, hi):

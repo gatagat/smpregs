@@ -21,12 +21,12 @@
 #TODO: allow for passing "-" to read regions (and other inputs) from stdin - save it to tempdir to be able to go through it twice
 
 import logging
+import os
 import sys
 from pyfasta import Fasta
 from region_utils import regions_reader, AllowedSpace, generate, \
     RegionAcceptorApproxGC, RegionAcceptorGenomicAnnotation, RegionAcceptorApproxHistogram, GenomicAnnotationsHistogram, KmerHistogram, RegionAcceptorNoNs
 from region_utils import get_log
-import socket
 
 
 def _setup_log(level=logging.INFO):
@@ -46,16 +46,13 @@ def _setup_log(level=logging.INFO):
     log.setLevel(level)
 
 
-def get_genome(genome_assembly, tempdir):
+def get_assembly(assembly):
     """
     Return Fasta object with the required genome.
     """
     # TODO: use tempdir
     logger = get_log('generate')
-    if socket.gethostname().split('.')[0].lower() in ['nbm-imp-55', 'mpba02']:
-        fasta_filename = '/Users/kazmar/data/genomes/%s.fa' % genome_assembly
-    else:
-        fasta_filename = '/groups/stark/kazmar/data/genomes/%s.fa' % genome_assembly
+    fasta_filename = os.path.expanduser('~kazmar/data/genomes/%s.fa' % assembly)
     logger.debug('Getting genome from %s', fasta_filename)
     return Fasta(fasta_filename)
 
@@ -129,14 +126,6 @@ def output_file_wrapper(filename=None):
         writer = open(filename, 'w')
         yield writer
         writer.close()
-
-@contextlib.contextmanager
-def tempdir():
-    from tempfile import mkdtemp
-    tmp = mkdtemp()
-    yield tmp
-    from shutil import rmtree
-    rmtree(tmp)
 
 
 def output_region(stream, region):
@@ -250,19 +239,18 @@ if __name__ == '__main__':
     logger = get_log('main')
     logger.debug('Logging started at level %d', loglevel)
 
-    with tempdir() as tmp:
-        genome_fasta = get_genome(opts.genome_assembly, tmp)
-        acceptors = parse_filters(opts.filters, genome_fasta, opts.genomic_annotations)
-        acceptors = [(RegionAcceptorNoNs, {})] + acceptors
-        allowed_space_opts = {}
-        if opts.include is not None:
-            allowed_space_opts['include'] = regions_reader(opts.include)
-        if opts.exclude is None:
-            allowed_space_opts['exclude'] = regions_reader(opts.regions)
-        else:
-            allowed_space_opts['exclude'] = regions_reader([opts.regions, opts.exclude])
-        allowed_space = AllowedSpace(fasta=genome_fasta, **allowed_space_opts)
-        with output_file_wrapper(opts.output) as fw:
-            for _, region in sample_regions(
-                    regions_reader(opts.regions), allowed_space, acceptors, genome_fasta):
-                output_region(fw, region)
+    genome_fasta = get_assembly(opts.genome_assembly)
+    acceptors = parse_filters(opts.filters, genome_fasta, opts.genomic_annotations)
+    acceptors = [(RegionAcceptorNoNs, {})] + acceptors
+    allowed_space_opts = {}
+    if opts.include is not None:
+        allowed_space_opts['include'] = regions_reader(opts.include)
+    if opts.exclude is None:
+        allowed_space_opts['exclude'] = regions_reader(opts.regions)
+    else:
+        allowed_space_opts['exclude'] = regions_reader([opts.regions, opts.exclude])
+    allowed_space = AllowedSpace(fasta=genome_fasta, **allowed_space_opts)
+    with output_file_wrapper(opts.output) as fw:
+        for _, region in sample_regions(
+                regions_reader(opts.regions), allowed_space, acceptors, genome_fasta):
+            output_region(fw, region)
