@@ -30,7 +30,7 @@ def region_length(r):
 
 
 def region_sequence(fasta, r):
-    return fasta[r.chr][r.start:r.stop]
+    return fasta[r.chrom][r.start:r.stop]
 
 
 def region_gc(fasta, r):
@@ -43,7 +43,7 @@ def test_sample_regions_simple():
     for input_region, random_region in sample_regions(
             regions_file, AllowedSpace(genome_fasta), [], genome_fasta):
         assert region_length(input_region) == region_length(random_region)
-        assert input_region.chr == random_region.chr
+        assert input_region.chrom == random_region.chrom
     os.unlink(regions_file)
 
 
@@ -95,8 +95,8 @@ def test_sample_regions_kmers():
             regions_file, AllowedSpace(genome_fasta),
             [(RegionAcceptorApproxHistogram, dict(threshold=20, histogram=KmerHistogram(fasta=genome_fasta, k=kmer_k), features_per_nt=2))], genome_fasta):
         assert region_length(input_region) == region_length(random_region)
-        input_kmers = count_kmers(kmer_k, str(genome_fasta[input_region.chr][input_region.start:input_region.stop]).upper())
-        random_kmers = count_kmers(kmer_k, str(genome_fasta[random_region.chr][random_region.start:random_region.stop]).upper())
+        input_kmers = count_kmers(kmer_k, str(genome_fasta[input_region.chrom][input_region.start:input_region.stop]).upper())
+        random_kmers = count_kmers(kmer_k, str(genome_fasta[random_region.chrom][random_region.start:random_region.stop]).upper())
         print input_region
         print input_kmers, random_kmers
         errors = 2*(input_region.stop - input_region.start) - histogram_intersection(dict(zip(kmer_keys, input_kmers)), dict(zip(kmer_keys, random_kmers)))

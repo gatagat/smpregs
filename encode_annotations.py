@@ -16,11 +16,11 @@ def create_encoded_fasta(input_filename, output_filename, flatten=True, codes=No
     with open(output_filename, 'w') as fw:
         chrom = None
         for region in regions_reader(input_filename):
-            if chrom != region.chr:
+            if chrom != region.chrom:
                 if chrom is not None:
                     fw.write('\n')
-                fw.write('>' + region.chr + '\n')
-                chrom = region.chr
+                fw.write('>' + region.chrom + '\n')
+                chrom = region.chrom
                 assert region.start == 0
                 old_stop = region.stop
             else:
