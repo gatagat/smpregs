@@ -1,8 +1,8 @@
-__all__ = ['regions_for']
+__all__ = ['regions_for', 'generate']
 
 import os
 from .smpregs import get_assembly, parse_filters, sample_regions
-from .region_utils import AllowedSpace, RegionAcceptorNoNs
+from .region_utils import AllowedSpace, RegionAcceptorNoNs, generate
 
 def regions_for(regions, include_file=None, ctrl_props=None):
     """
