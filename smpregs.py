@@ -20,6 +20,7 @@
 
 #TODO: allow for passing "-" to read regions (and other inputs) from stdin - save it to tempdir to be able to go through it twice
 
+import numpy as np
 import logging
 import os
 import sys
@@ -139,7 +140,7 @@ def output_region(stream, region):
     stream.write(s + '\n')
 
 
-def sample_regions(regions, allowed_space, acceptors, fasta):
+def sample_regions(regions, allowed_space, acceptors, fasta, prng=None):
     """
     Generator providing random regions that match input regions.
 
@@ -157,6 +158,8 @@ def sample_regions(regions, allowed_space, acceptors, fasta):
         - Accept/reject candidate regions.
     fasta: Fasta object
         - Provides access to sequences in regions_file or allowed_space.
+    prng: NumPy RandomState object
+        - pseudo-random number generator
 
     Returns:
     ========
@@ -164,6 +167,8 @@ def sample_regions(regions, allowed_space, acceptors, fasta):
     (input_region, matching_random_region)
     """
     logger = get_log('generate')
+    if prng is None:
+        prng = np.random.RandomState()
     for input_region in regions:
         acceptor_instances = []
         for acceptor in acceptors:
@@ -173,7 +178,7 @@ def sample_regions(regions, allowed_space, acceptors, fasta):
                     **acceptor[1])]
         accepted = False
         while not accepted:
-            candidate = generate(input_region, allowed_space)
+            candidate = generate(input_region, allowed_space, prng=prng)
             accepted = True
             for acceptor in acceptor_instances:
                 if not acceptor.accept(candidate):

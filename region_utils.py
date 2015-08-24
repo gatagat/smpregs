@@ -330,7 +330,7 @@ class AllowedSpace(object):
         return self._range[chrom]
 
 
-def the_random_regions_lair(region, lo, hi):
+def the_random_regions_lair(region, lo, hi, prng=None):
     """
     Infinite generator of a random regions in the interval [lo, hi).
 
@@ -339,19 +339,19 @@ def the_random_regions_lair(region, lo, hi):
     """
     region_len = region.stop - region.start
     while True:
-        start = np.random.randint(lo, hi)
+        start = prng.randint(lo, hi)
         stop = start + region_len
         yield Region(chrom=region.chrom, start=start, stop=stop, name='rnd_' + region.name)
 
 
-def generate(input_region, allowed_space, max_generate_iter=10000):
+def generate(input_region, allowed_space, max_generate_iter=10000, prng=None):
     """
     Generate a random region for the given region and in the allowed space.
     """
     logger = get_log('generate')
     i = 0
     lo, hi = allowed_space.range(input_region.chrom)
-    for region in the_random_regions_lair(input_region, lo, hi):
+    for region in the_random_regions_lair(input_region, lo, hi, prng=prng):
         if allowed_space.contains(region):
             logger.debug('GEN %s', region)
             return region
